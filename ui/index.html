@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HybridCache RAG v2 - AI Chat Assistant</title>
+    <link rel="icon" href="data:,">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/ui/style.css?v=4">
+</head>
+
+<body>
+    <div class="chatbot-wrapper">
+        <!-- LEFT SIDEBAR: DOCUMENTS HISTORY -->
+        <aside id="leftSidebar" class="left-sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="logo-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    <span>HybridCache RAG v2</span>
+                </div>
+                <button id="closeSidebarBtn" class="icon-btn mobile-only-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            
+            <div class="model-status-card">
+                <div class="status-indicator"></div>
+                <div class="status-info">
+                    <span class="status-label">RAG Engine Active</span>
+                    <span class="status-model">llama-3.1-8b-instant</span>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Indexed Documents</h3>
+                <div id="indexedDocsList" class="indexed-docs-list">
+                    <!-- Loaded dynamically from API -->
+                    <div class="list-empty">No indexed documents. Attach a PDF below to start.</div>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer" style="margin-top: auto; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; gap: 10px;">
+                <button id="flushPreprocessedBtn" class="flush-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; color: #fca5a5; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s ease;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                    <span>Clear Preprocessed Cache</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN CHAT CONTAINER -->
+        <main class="chat-container">
+            <!-- CHAT HEADER -->
+            <header class="chat-header">
+                <div class="header-left">
+                    <button id="toggleSidebarBtn" class="icon-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                    <div class="chat-title-info">
+                        <h2>Document Chat Assistant</h2>
+                        <p class="subtitle">Ask questions based on your indexed library</p>
+                    </div>
+                </div>
+                
+                <div class="header-actions">
+                    <button id="toggleDetailsBtn" class="details-toggle-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        <span>Document Inspector</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- CHAT WINDOW (MESSAGES SCROLL) -->
+            <div id="chatWindow" class="chat-window">
+                <!-- CHAT EMPTY STATE -->
+                <div id="chatEmptyState" class="chat-empty-state">
+                    <div class="empty-icon-wrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    </div>
+                    <h2>Start a Conversation</h2>
+                    <p>Select a previously indexed document from the sidebar to chat, or attach a new PDF using the "+" button below.</p>
+                    <div class="quick-starts">
+                        <button class="quick-start-chip" data-query="Summarize the key findings in the documents.">
+                            Summarize my documents
+                        </button>
+                        <button class="quick-start-chip" data-query="What projects are listed?">
+                            List projects
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHAT INPUT ZONE -->
+            <div class="chat-input-area">
+                <!-- ATTACHMENT BADGE -->
+                <div id="attachmentBadge" class="attachment-badge hidden">
+                    <div class="badge-content">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                        <span id="attachedFileName">document.pdf</span>
+                        <button id="clearAttachmentBtn" class="clear-badge-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- INPUT PILL CONTAINER -->
+                <div class="input-pill-container">
+                    <button id="attachBtn" class="attach-btn" title="Attach PDF Document">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    </button>
+                    
+                    <button id="settingsBtn" class="settings-btn" title="Indexing Page Options">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    </button>
+                    
+                    <input type="text" id="chatInput" placeholder="Ask anything about your documents..." autocomplete="off">
+                    
+                    <button id="sendBtn" class="send-btn" title="Send Message">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="send-icon"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+
+                <!-- POPOVER SETTINGS DIALOG -->
+                <div id="selectionSettingsPopover" class="selection-popover hidden">
+                    <div class="popover-arrow"></div>
+                    <h4>Page Indexing Options</h4>
+                    <div class="form-group">
+                        <label for="pageOption">Selection Mode</label>
+                        <select id="pageOption">
+                            <option value="all">Entire PDF</option>
+                            <option value="single">Single Page</option>
+                            <option value="range">Page Range</option>
+                            <option value="custom">Custom Pages</option>
+                        </select>
+                    </div>
+                    <div id="dynamicInputs" class="dynamic-inputs-container"></div>
+                </div>
+
+                <!-- HIDDEN FILE INPUT -->
+                <input type="file" id="pdfFile" accept=".pdf" style="display: none;">
+            </div>
+            
+            <div id="message" class="message-box hidden"></div>
+        </main>
+
+        <!-- RIGHT SIDEBAR: DOCUMENT INSPECTOR (COLLAPSIBLE DRAWER) -->
+        <aside id="detailsDrawer" class="details-drawer hidden-drawer">
+            <div class="drawer-header">
+                <h3>Document Inspector</h3>
+                <button id="closeDrawerBtn" class="icon-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            
+            <div class="drawer-metadata" id="resultMetadata">
+                <div class="meta-item-empty">No active document inspection.</div>
+            </div>
+
+            <div class="drawer-tabs">
+                <button class="drawer-tab-btn active" data-tab="pages">Pages</button>
+                <button class="drawer-tab-btn" data-tab="chunks">Chunks</button>
+                <button class="drawer-tab-btn" data-tab="json">JSON</button>
+                <button class="drawer-tab-btn" data-tab="logs">Logs</button>
+            </div>
+
+            <div class="drawer-content-area">
+                <!-- PAGES TAB -->
+                <div id="pagesTab" class="drawer-tab-content">
+                    <div id="result" class="pages-grid">
+                        <div class="drawer-empty-state">No rendered pages. Index a PDF to view visual frames.</div>
+                    </div>
+                </div>
+
+                <!-- CHUNKS TAB -->
+                <div id="chunksTab" class="drawer-tab-content hidden">
+                    <div id="chunksList" class="chunks-list">
+                        <div class="drawer-empty-state">No semantic chunks extracted.</div>
+                    </div>
+                </div>
+
+                <!-- JSON TAB -->
+                <div id="jsonTab" class="drawer-tab-content hidden">
+                    <pre><code id="jsonCode">{}</code></pre>
+                </div>
+
+                <!-- LOGS TAB -->
+                <div id="logsTab" class="drawer-tab-content hidden">
+                    <div class="perplexity-log-container">
+                        <div id="progressList" class="progress-list">
+                            <!-- Steps dynamically loaded here -->
+                        </div>
+                        <div class="console-collapsible">
+                            <button id="toggleConsoleBtn" class="toggle-console-btn">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                Show Raw Developer Logs
+                            </button>
+                            <div id="rawConsoleWrapper" class="raw-console-wrapper hidden">
+                                <pre><code id="logsConsole">Ready.</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- HIDDEN CONTROLS TO PREVENT JS CRASHES -->
+    <div id="hiddenSearchControls" style="display:none;">
+        <select id="searchTopK"><option value="5" selected>5</option></select>
+        <select id="searchDocFilter"><option value="">All Documents</option></select>
+        <select id="searchMinSim"><option value="0" selected>0</option></select>
+        <select id="searchRerank"><option value="true" selected>true</option></select>
+    </div>
+
+    <script src="/ui/script.js?v=4"></script>
+</body>
+
+</html>

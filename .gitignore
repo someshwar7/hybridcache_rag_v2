@@ -1,0 +1,34 @@
+# Python compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Sensitive credentials
+.env
+.env.*
+!.env.example
+
+# Temporary uploads and preprocessed data
+uploads/*
+!uploads/.gitkeep
+preprocessed_data/
+
+# Application logs
+logs/*.log
+
+# IDEs and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

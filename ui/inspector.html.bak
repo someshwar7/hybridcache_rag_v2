@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AeroPDF RAG - Document Inspector</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/ui/style.css?v=3">
+    <style>
+        body {
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            background: radial-gradient(circle at top left, #1e1b4b 0%, #0f172a 100%);
+        }
+
+        .inspector-layout {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Sidebar Selector */
+        .inspector-sidebar {
+            width: 320px;
+            background: rgba(15, 23, 42, 0.6);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .home-link {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 6px 12px;
+            border-radius: 8px;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            transition: all 0.2s;
+        }
+
+        .home-link:hover {
+            background: rgba(99, 102, 241, 0.2);
+            transform: translateX(-2px);
+        }
+
+        .sidebar-section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+        }
+
+        /* Main Inspector Panel */
+        .inspector-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: rgba(9, 13, 22, 0.4);
+        }
+
+        .inspector-header {
+            padding: 24px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.2);
+        }
+
+        .inspector-header h2 {
+            font-size: 20px;
+            background: linear-gradient(135deg, #ffffff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .document-meta-container {
+            display: flex;
+            gap: 16px;
+        }
+
+        .meta-pill {
+            display: flex;
+            flex-direction: column;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        .meta-pill .label {
+            color: var(--text-secondary);
+            font-size: 10px;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .meta-pill .value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Tab Navigation */
+        .inspector-tabs-bar {
+            display: flex;
+            padding: 0 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(15, 23, 42, 0.1);
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            padding: 16px 24px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            position: relative;
+            transition: color 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-btn.active {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .tab-btn.active::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--accent);
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        /* Content Area */
+        .inspector-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            height: calc(100% - 150px);
+        }
+
+        .tab-pane {
+            height: 100%;
+        }
+
+        .hidden-pane {
+            display: none;
+        }
+
+        pre {
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
+            color: #cbd5e1;
+            overflow: auto;
+            max-height: 100%;
+            height: 100%;
+        }
+
+        /* Document list scroll styling */
+        .indexed-docs-list {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .doc-item {
+            background: rgba(30, 41, 59, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .doc-item:hover {
+            background: rgba(99, 102, 241, 0.06);
+            border-color: rgba(99, 102, 241, 0.2);
+            transform: translateY(-1px);
+        }
+
+        .doc-item.active {
+            background: rgba(99, 102, 241, 0.12);
+            border-color: var(--accent);
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.15);
+        }
+
+        .doc-item-icon {
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        .doc-item-info {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .doc-item-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .doc-item-meta {
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        /* Empty state styling */
+        .inspector-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: var(--text-secondary);
+            gap: 16px;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .empty-icon-wrap {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--accent);
+            padding: 20px;
+            border-radius: 50%;
+            border: 1px dashed rgba(99, 102, 241, 0.3);
+        }
+
+        .inspector-empty-state h3 {
+            font-size: 18px;
+            color: var(--text-primary);
+        }
+
+        .inspector-empty-state p {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="inspector-layout">
+        <!-- SIDEBAR: DOCUMENT SELECTOR -->
+        <aside class="inspector-sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="logo-icon"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    <span>AeroPDF</span>
+                </div>
+                <a href="/ui/" class="home-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Chat
+                </a>
+            </div>
+
+            <div class="sidebar-section" style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+                <h3>Indexed Documents</h3>
+                <div id="indexedDocsList" class="indexed-docs-list">
+                    <div class="list-empty">Loading indexed documents...</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN INSPECTOR CONTENT -->
+        <main class="inspector-main">
+            <!-- HEADER -->
+            <header class="inspector-header">
+                <div class="header-title">
+                    <h2 id="inspectingTitle">Document Details</h2>
+                </div>
+                <div class="document-meta-container" id="documentMeta">
+                    <div class="meta-pill">
+                        <span class="label">Select a file</span>
+                        <span class="value">No active document</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- TABS -->
+            <nav class="inspector-tabs-bar">
+                <button class="tab-btn active" data-tab="pages">Pages</button>
+                <button class="tab-btn" data-tab="chunks">Semantic Chunks</button>
+                <button class="tab-btn" data-tab="json">Raw JSON</button>
+            </nav>
+
+            <!-- PANES -->
+            <div class="inspector-content">
+                <!-- PAGES TAB -->
+                <div id="pagesTab" class="tab-pane">
+                    <div id="result" class="pages-grid">
+                        <div class="inspector-empty-state">
+                            <div class="empty-icon-wrap">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><circle cx="12" cy="13" r="4"></circle><line x1="12" y1="9" x2="12" y2="17"></line></svg>
+                            </div>
+                            <h3>Select a Document</h3>
+                            <p>Choose an indexed document from the sidebar to inspect its rendered pages, semantic chunks, and raw layout metadata.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CHUNKS TAB -->
+                <div id="chunksTab" class="tab-pane hidden-pane">
+                    <div id="chunksList" class="chunks-list">
+                        <div class="drawer-empty-state">No semantic chunks loaded.</div>
+                    </div>
+                </div>
+
+                <!-- JSON TAB -->
+                <div id="jsonTab" class="tab-pane hidden-pane">
+                    <pre><code id="jsonCode">{}</code></pre>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script>
+        const indexedDocsList = document.getElementById("indexedDocsList");
+        const inspectingTitle = document.getElementById("inspectingTitle");
+        const documentMeta = document.getElementById("documentMeta");
+        const resultGrid = document.getElementById("result");
+        const chunksList = document.getElementById("chunksList");
+        const jsonCode = document.getElementById("jsonCode");
+
+        let activeDocumentId = null;
+
+        // URL Parameters detection
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlDocId = urlParams.get("document_id");
+        const urlFilename = urlParams.get("filename");
+
+        // Tab Switching
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+
+                document.querySelectorAll(".tab-pane").forEach(p => p.classList.add("hidden-pane"));
+                const targetPane = document.getElementById(`${btn.dataset.tab}Tab`);
+                if (targetPane) {
+                    targetPane.classList.remove("hidden-pane");
+                }
+            });
+        });
+
+        // Load document selector list
+        async function loadIndexedDocuments() {
+            try {
+                const res = await fetch("/retriever/documents");
+                const data = await res.json();
+                if (data.success) {
+                    indexedDocsList.innerHTML = "";
+                    if (data.documents.length === 0) {
+                        indexedDocsList.innerHTML = '<div class="list-empty">No indexed documents found.</div>';
+                        return;
+                    }
+                    data.documents.forEach(doc => {
+                        const docItem = document.createElement("div");
+                        docItem.className = "doc-item";
+                        if (activeDocumentId === doc.document_id || (urlDocId && parseInt(urlDocId) === doc.document_id)) {
+                            docItem.classList.add("active");
+                            activeDocumentId = doc.document_id;
+                        }
+
+                        docItem.innerHTML = `
+                            <div class="doc-item-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                            </div>
+                            <div class="doc-item-info">
+                                <span class="doc-item-title" title="${escapeHtml(doc.filename)}">${escapeHtml(doc.filename)}</span>
+                                <span class="doc-item-meta">${doc.chunk_count} chunks · ID #${doc.document_id}</span>
+                            </div>
+                        `;
+
+                        docItem.addEventListener("click", () => {
+                            document.querySelectorAll(".doc-item").forEach(item => item.classList.remove("active"));
+                            docItem.classList.add("active");
+                            activeDocumentId = doc.document_id;
+                            inspectDocumentDetails(doc.document_id, doc.filename);
+                        });
+
+                        indexedDocsList.appendChild(docItem);
+                    });
+
+                    // Trigger direct inspection from URL param if present
+                    if (activeDocumentId) {
+                        const matched = data.documents.find(d => d.document_id === activeDocumentId);
+                        if (matched) {
+                            inspectDocumentDetails(matched.document_id, matched.filename);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error("Could not load indexed documents:", e);
+                indexedDocsList.innerHTML = '<div class="list-empty">Error connecting to server.</div>';
+            }
+        }
+
+        async function inspectDocumentDetails(docId, filename) {
+            inspectingTitle.textContent = filename;
+
+            documentMeta.innerHTML = `
+                <div class="meta-pill">
+                    <span class="label">Document ID</span>
+                    <span class="value">#${docId}</span>
+                </div>
+            `;
+
+            try {
+                // Fetch document chunks
+                const res = await fetch("/retriever/retrieve", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        query: "*",
+                        top_k: 50,
+                        document_id: docId,
+                        min_similarity: 0
+                    })
+                });
+                const data = await res.json();
+                if (data.success && data.results) {
+                    // Update Metadata with chunk count
+                    documentMeta.innerHTML += `
+                        <div class="meta-pill">
+                            <span class="label">Chunks</span>
+                            <span class="value">${data.results.length}</span>
+                        </div>
+                    `;
+
+                    // Render Chunks Tab
+                    chunksList.innerHTML = "";
+                    data.results.forEach((chunk, index) => {
+                        const card = document.createElement("div");
+                        card.className = "chunk-card";
+                        const headerText = chunk.header ? chunk.header : `Chunk ${index + 1}`;
+                        card.innerHTML = `
+                            <div class="chunk-header">
+                                <span class="chunk-title">${escapeHtml(headerText)}</span>
+                                <span class="chunk-meta">Page ${chunk.page_no}</span>
+                            </div>
+                            <div class="chunk-body" style="font-size: 13px; color: var(--text-primary);">${escapeHtml(chunk.chunk_text)}</div>
+                        `;
+                        chunksList.appendChild(card);
+                    });
+
+                    // Render Raw JSON
+                    jsonCode.textContent = JSON.stringify(data.results, null, 2);
+
+                    // For the Pages Visual grid, try to render a placeholder grid
+                    resultGrid.innerHTML = `
+                        <div style="grid-column: 1/-1; padding: 40px; background: rgba(30,41,59,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; text-align: center;">
+                            <p style="color: var(--text-secondary); font-size: 13px;">Rendered page visual frames are generated live during PDF file uploading. Chunks and JSON are available above.</p>
+                        </div>
+                    `;
+                }
+            } catch (e) {
+                console.error("Error retrieving chunks:", e);
+                chunksList.innerHTML = '<div class="list-empty">Error retrieving semantic chunks.</div>';
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return "";
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        // Initialize
+        document.addEventListener("DOMContentLoaded", () => {
+            loadIndexedDocuments();
+        });
+    </script>
+</body>
+
+</html>
