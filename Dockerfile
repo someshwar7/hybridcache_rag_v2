@@ -29,7 +29,7 @@ EXPOSE 1800
 ENV REDIS_HOST=localhost \
     REDIS_PORT=6379 \
     REDIS_DB=0 \
-    DATABASE_URL=postgresql://postgres:1812@localhost:5432/developer_db
+    DATABASE_URL=postgresql://postgres:postgres@localhost:5432/developer_db
 
 # Start the FastAPI application with uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "1800"]

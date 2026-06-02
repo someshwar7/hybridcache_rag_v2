@@ -28,6 +28,12 @@ sys.path.insert(0, ROOT)
 # 'pdf_render', 'docling_extractor' etc. resolve correctly.
 sys.path.insert(0, os.path.join(ROOT, "preprocessing"))
 
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://postgres:postgres@localhost:5432/developer_db"
+)
+
+
 PASS = "PASS"
 FAIL = "FAIL"
 WARN = "WARN"
@@ -145,7 +151,7 @@ print("\n[5] PostgreSQL — Connection")
 
 def pg_connect():
     from sqlalchemy import create_engine, text
-    engine = create_engine("postgresql://postgres:1812@localhost:5432/developer_db")
+    engine = create_engine(DATABASE_URL)
     with engine.connect() as conn:
         result = conn.execute(text("SELECT version()")).scalar()
     return result.split(",")[0]
@@ -159,7 +165,7 @@ print("\n[6] pgvector Extension")
 
 def pgvector_check():
     from sqlalchemy import create_engine, text
-    engine = create_engine("postgresql://postgres:1812@localhost:5432/developer_db")
+    engine = create_engine(DATABASE_URL)
     with engine.connect() as conn:
         row = conn.execute(text(
             "SELECT extname FROM pg_extension WHERE extname = 'vector'"
@@ -179,7 +185,7 @@ EXPECTED_TABLES = ["files", "raw_text", "images", "tables", "embeddings"]
 
 def table_exists(tbl):
     from sqlalchemy import create_engine, text
-    engine = create_engine("postgresql://postgres:1812@localhost:5432/developer_db")
+    engine = create_engine(DATABASE_URL)
     with engine.connect() as conn:
         row = conn.execute(text(
             "SELECT tablename FROM pg_tables "
@@ -199,7 +205,7 @@ print("\n[8] Embedding Column Types")
 
 def check_vector_col(table, col, expected_dim):
     from sqlalchemy import create_engine, text
-    engine = create_engine("postgresql://postgres:1812@localhost:5432/developer_db")
+    engine = create_engine(DATABASE_URL)
     with engine.connect() as conn:
         row = conn.execute(text(
             "SELECT udt_name FROM information_schema.columns "
