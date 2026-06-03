@@ -54,6 +54,13 @@ graph TD
     I -->|Tabular standings / code blocks| J[Styled HTML visual rendering]
 ```
 
+### Comparison: Legacy Traditional RAG v1 vs. HybridCache RAG v2
+For comparative reference, here is the workflow of the legacy **Traditional RAG v1** system:
+
+![Traditional RAG v1](TRADITIONAL%20RAG%20V1.gif)
+
+---
+
 ### A. Document Upload & Preprocessing Flow
 1. **Upload**: User uploads a PDF file.
 2. **Page Rendering**: `PyMuPDF` (`fitz`) and `Pillow` (`PIL`) render document page frames as base64 images for visual inspection.
