@@ -16,40 +16,26 @@ from logs.logs_router import api_logger
 
 load_dotenv()
 
-COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+# ─────────────────────────────────────────────
+# Configuration
+# ─────────────────────────────────────────────
 RERANK_MODEL = "rerank-english-v3.0"
 
-if not COHERE_API_KEY:
-    raise EnvironmentError("COHERE_API_KEY not found in environment.")
-
-_client = cohere.Client(api_key=COHERE_API_KEY)
+from core.embeddings import get_cohere_client
+from sqlalchemy.orm import Session
+from typing import Optional
 
 
 def rerank_results(
     query: str,
     candidates: List[Dict[str, Any]],
-    top_k: int = 5
+    top_k: int = 5,
+    session_id: Optional[str] = None,
+    db: Optional[Session] = None
 ) -> List[Dict[str, Any]]:
     """
     Reranks candidate chunks based on semantic relevance to the query.
-
-    Parameters
-    ----------
-    query : str
-        The user's search query.
-    candidates : list[dict]
-        List of dictionary objects returned from the initial vector search.
-        Each dictionary must contain at least `chunk_text`.
-    top_k : int
-        The number of top results to return after reranking.
-
-    Returns
-    -------
-    list[dict]
-        The reranked and filtered results. Each dictionary will have:
-          - similarity: updated to the rerank relevance score (0.0 - 1.0)
-          - rank: updated to the new rank (1-indexed)
-          - other metadata preserved
+    Dynamically loads the Cohere client based on active session configuration.
     """
     if not candidates:
         return []
@@ -61,8 +47,9 @@ def rerank_results(
     top_k = min(top_k, len(candidates))
 
     try:
+        client = get_cohere_client(session_id, db)
         api_logger.info(f"Initiating Cohere Rerank API Call - Model: {RERANK_MODEL}, Candidates: {len(documents)}")
-        response = _client.rerank(
+        response = client.rerank(
             model=RERANK_MODEL,
             query=query,
             documents=documents,
@@ -95,3 +82,4 @@ def rerank_results(
             candidate["rank"] = rank
             fallback_results.append(candidate)
         return fallback_results
+

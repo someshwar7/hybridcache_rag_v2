@@ -1,37 +1,31 @@
-# Exclude virtual environments
+# Virtual environment
 .venv/
 venv/
-env/
-ENV/
 
-# Exclude sensitive environment secrets
+# Secrets - never bake into image
 .env
 .env.*
 
-# Exclude uploads and temporary preprocessed data
+# Unnecessary data
+preprocessed_data/
+logs/
 uploads/*
 !uploads/.gitkeep
-preprocessed_data/
-
-# Exclude application logs
-logs/*.log
-
-# Exclude documentation and local diagrams
-db workflow.png
-doc/
-*.md
-.gitignore
-
-
-# Exclude git directories and IDE configurations
-.git/
-.vscode/
-.idea/
-
-# Exclude python cache files
 __pycache__/
 *.py[cod]
-*$py.class
 
-# Exclude local tests
+# Dev/IDE
+.vscode/
+.idea/
+.git/
+
+# Docs and tests
+doc/
+docs/
 tests/
+test/
+README.md
+*.png
+
+# Windows
+start_server.bat

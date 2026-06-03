@@ -13,6 +13,7 @@ from core.database import SessionLocal
 from core.reranker import rerank_results
 from schemas.table_schema import TableData
 from schemas.image_schema import Image
+from sqlalchemy.orm import Session
 
 
 def minmax(values: List[float]) -> List[float]:
@@ -34,7 +35,10 @@ def retrieve_hybrid_chunks(
     pool_size: int = 20,
     document_id: Optional[int] = None,
     page_no: Optional[int] = None,
+    session_id: Optional[str] = None,
+    db: Optional[Session] = None
 ) -> List[Dict[str, Any]]:
+
     """
     Retrieve the top-k most relevant chunks using a hybrid approach:
     1. BM25 Search
@@ -104,7 +108,9 @@ def retrieve_hybrid_chunks(
         top_k=pool_size, 
         document_id=document_id, 
         use_reranker=False,
-        page_no=page_no
+        page_no=page_no,
+        session_id=session_id,
+        db=db
     )
 
     # 3. Align results into a unique set
@@ -153,21 +159,26 @@ def retrieve_hybrid_chunks(
     candidates = combined[:pool_size]
 
     # 6. Rerank via Cohere
-    reranked_results = rerank_results(query, candidates, top_k=top_k)
+    reranked_results = rerank_results(query, candidates, top_k=top_k, session_id=session_id, db=db)
 
     # 7. Check presence of tables and images on final results' pages
-    db = SessionLocal()
+    opened_db = False
+    db_session = db
+    if db_session is None:
+        db_session = SessionLocal()
+        opened_db = True
+        
     try:
         for r in reranked_results:
             doc_id = r["document_id"]
             page_no = r["page_no"]
             
-            has_table = db.query(TableData).filter(
+            has_table = db_session.query(TableData).filter(
                 TableData.document_id == doc_id,
                 TableData.page_no == page_no
             ).first() is not None
             
-            has_image = db.query(Image).filter(
+            has_image = db_session.query(Image).filter(
                 Image.document_id == doc_id,
                 Image.page_no == page_no
             ).first() is not None
@@ -175,7 +186,9 @@ def retrieve_hybrid_chunks(
             r["has_tables"] = has_table
             r["has_images"] = has_image
     finally:
-        db.close()
+        if opened_db:
+            db_session.close()
+
 
     if redis_client:
         try:

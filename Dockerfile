@@ -26,10 +26,14 @@ COPY . .
 EXPOSE 1800
 
 # Default environment configuration variables (can be overridden during run)
-ENV REDIS_HOST=localhost \
+ENV REDIS_HOST=redis \
     REDIS_PORT=6379 \
     REDIS_DB=0 \
-    DATABASE_URL=postgresql://postgres:postgres@localhost:5432/developer_db
+    REDIS_PASSWORD=1812 \
+    POSTGRES_USER=postgres \
+    POSTGRES_PASSWORD=1812 \
+    POSTGRES_DB=applicatio_db \
+    DATABASE_URL=postgresql://postgres:1812@postgres:5432/applicatio_db
 
 # Start the FastAPI application with uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "1800"]

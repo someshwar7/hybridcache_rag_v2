@@ -24,6 +24,7 @@ def retrieve(request: RetrieveRequest):
             document_id=request.document_id,
             min_similarity=request.min_similarity,
             use_reranker=request.use_reranker,
+            session_id=request.session_id
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

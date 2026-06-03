@@ -1,0 +1,46 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "1800:1800"
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=1812
+      - POSTGRES_DB=applicatio_db
+      - DATABASE_URL=postgresql://postgres:1812@postgres:5432/applicatio_db
+      - REDIS_HOST=redis
+      - REDIS_PASSWORD=1812
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+      - ./preprocessed_data:/app/preprocessed_data
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "1812"
+      POSTGRES_DB: applicatio_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    command: redis-server --requirepass 1812
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

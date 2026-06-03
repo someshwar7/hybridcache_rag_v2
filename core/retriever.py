@@ -23,6 +23,7 @@ Usage:
 from typing import List, Optional, Dict, Any
 
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from core.database import engine
 from core.embeddings import get_single_embedding
@@ -41,7 +42,10 @@ def retrieve_chunks(
     min_similarity: float = 0.0,
     use_reranker: bool = True,
     page_no: Optional[int] = None,
+    session_id: Optional[str] = None,
+    db: Optional[Session] = None
 ) -> List[Dict[str, Any]]:
+
     """
     Retrieve the top-k most relevant chunks for a given query.
 
@@ -142,7 +146,7 @@ def retrieve_chunks(
     db_limit = max(50, top_k * 3) if use_reranker else top_k
 
     # ── Step 2: Vector Similarity Search (pgvector) ───────────
-    query_vector = get_single_embedding(query.strip(), input_type="search_query")
+    query_vector = get_single_embedding(query.strip(), input_type="search_query", session_id=session_id, db=db)
     vector_str   = "[" + ",".join(str(round(v, 8)) for v in query_vector) + "]"
     doc_filter = "AND e.document_id = :doc_id" if document_id is not None else ""
     page_filter = "AND rt.page_no BETWEEN :page_lo AND :page_hi" if page_no is not None else ""
@@ -302,7 +306,7 @@ def retrieve_chunks(
 
     # ── Step 5: Re-rank results if requested ─────────────────
     if use_reranker and results:
-        results = rerank_results(query=query, candidates=results, top_k=top_k)
+        results = rerank_results(query=query, candidates=results, top_k=top_k, session_id=session_id, db=db)
 
     # Tag every result as 'chunk'
     for r in results:

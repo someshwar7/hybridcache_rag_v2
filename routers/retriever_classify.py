@@ -85,7 +85,7 @@ def classify_query(request: RetrieveRequest):
             # Standard path: Run core intent classification with top_k = 3
             docs = list_indexed_documents()
             has_docs = len(docs) > 0
-            classification = classify_intent(request.query, has_documents=has_docs, top_k=3)
+            classification = classify_intent(request.query, has_documents=has_docs, top_k=3, session_id=request.session_id)
             intent = classification.intent
             explanation = classification.explanation
             

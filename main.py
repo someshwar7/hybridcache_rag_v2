@@ -17,8 +17,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "preprocessing"))
 from logs.ui_router import router as ui_router
 from logs.logs_router import router as logs_router
 from routers import pdf_router, retriever_retrieve, retriever_answer, retriever_classify, db_router, preprocessed_router
+from routers.byok_router import router as byok_router
 from test.router import router as test_router
 from service.session_manager import cleanup_expired_sessions
+from core.database import Base, engine
 
 # =====================================================================
 # BACKGROUND CLEANUP TASK & LIFESPAN CONFIGURATION
@@ -36,6 +38,8 @@ async def session_cleanup_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup: Auto-create any missing tables
+    Base.metadata.create_all(bind=engine)
     # Startup: Launch background worker task
     cleanup_task = asyncio.create_task(session_cleanup_loop())
     yield
@@ -72,4 +76,5 @@ app.include_router(retriever_answer)
 app.include_router(retriever_classify)
 app.include_router(db_router)
 app.include_router(preprocessed_router)
+app.include_router(byok_router)
 app.include_router(test_router)

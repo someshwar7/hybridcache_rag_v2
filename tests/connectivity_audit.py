@@ -67,16 +67,19 @@ print("=" * 60)
 # ─────────────────────────────────────────────────────────────
 # 1. ENV KEYS
 # ─────────────────────────────────────────────────────────────
-print("\n[1] Environment / API Keys")
+print("\n[1] Environment / BYOK Config")
 
 from dotenv import load_dotenv
 load_dotenv(os.path.join(ROOT, ".env"))
 
-check("COHERE_API_KEY present",
-      lambda: None if os.getenv("COHERE_API_KEY") else (_ for _ in ()).throw(EnvironmentError("Missing")))
+check("BYOK_ENCRYPTION_KEY present (or generated automatically on startup)",
+      lambda: None if os.getenv("BYOK_ENCRYPTION_KEY") or os.path.exists(os.path.join(ROOT, ".env")) else (_ for _ in ()).throw(EnvironmentError("Missing")))
 
-check("GROQ_API_KEY present",
-      lambda: None if os.getenv("GROQ_API_KEY") else (_ for _ in ()).throw(EnvironmentError("Missing")))
+warn("COHERE_API_KEY present in environment",
+      lambda: None if os.getenv("COHERE_API_KEY") else (_ for _ in ()).throw(EnvironmentError("Missing (not required if using BYOK)")))
+
+warn("GROQ_API_KEY present in environment",
+      lambda: None if os.getenv("GROQ_API_KEY") else (_ for _ in ()).throw(EnvironmentError("Missing (not required if using BYOK)")))
 
 check("TAVILY_API_KEY present",
       lambda: None if os.getenv("TAVILY_API_KEY") else (_ for _ in ()).throw(EnvironmentError("Missing")))

@@ -5,67 +5,165 @@ Interface to Groq Chat Completions API for RAG synthesis.
 """
 
 import os
-from typing import List, Dict, Any, Generator, Optional
+from typing import List, Dict, Any, Generator, Optional, Tuple
 from groq import Groq
 import groq
+import cohere
 from dotenv import load_dotenv
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from data_models import StructuredAnswer
 from logs.logs_router import api_logger
+from sqlalchemy.orm import Session
 
+# Load environment if present (for local developer override)
 load_dotenv()
 
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = "llama-3.1-8b-instant"
+# Build the tuple of rate-limit exceptions for retry logic
+RATE_LIMIT_EXCEPTIONS = (groq.RateLimitError,)
+try:
+    import cohere.errors
+    RATE_LIMIT_EXCEPTIONS += (cohere.errors.TooManyRequestsError,)
+except Exception:
+    pass
 
-if not GROQ_API_KEY:
-    raise EnvironmentError("GROQ_API_KEY not found in environment.")
+from service.byok_service import provider_manager, KeyNotFoundError
+from core.database import SessionLocal
 
-_client = Groq(api_key=GROQ_API_KEY)
+def get_llm_client(session_id: Optional[str] = None, db: Optional[Session] = None) -> Tuple[str, Any]:
+    """
+    Dynamically retrieves the active LLM client (Groq or Cohere) for the session/user.
+    If no user-specific key is configured, falls back to environment variables.
+    Raises KeyNotFoundError if no credentials can be resolved.
+    """
+    opened_db = False
+    if db is None:
+        db = SessionLocal()
+        opened_db = True
+        
+    try:
+        if session_id:
+            try:
+                provider, client = provider_manager.get_active_client(db, session_id)
+                return provider, client
+            except KeyNotFoundError:
+                pass
+                
+        # Fallback to environment variables
+        groq_env = os.getenv("GROQ_API_KEY")
+        if groq_env:
+            active_provider = "groq"
+            if session_id:
+                try:
+                    active_provider = provider_manager.get_active_provider(db, session_id)
+                except Exception:
+                    pass
+            if active_provider == "cohere" and os.getenv("COHERE_API_KEY"):
+                return "cohere", cohere.Client(api_key=os.getenv("COHERE_API_KEY"))
+            return "groq", Groq(api_key=groq_env)
+            
+        cohere_env = os.getenv("COHERE_API_KEY")
+        if cohere_env:
+            return "cohere", cohere.Client(api_key=cohere_env)
+            
+        raise KeyNotFoundError("No LLM API keys configured. Please upload an API key.")
+    finally:
+        if opened_db:
+            db.close()
 
 
 @retry(
     stop=stop_after_attempt(5),
     wait=wait_exponential(multiplier=1, min=1, max=10),
-    retry=retry_if_exception_type(groq.RateLimitError),
+    retry=retry_if_exception_type(RATE_LIMIT_EXCEPTIONS),
     reraise=True
 )
-def _client_chat_create_with_retry(*args, **kwargs):
+def call_llm_chat_with_retry(
+    provider: str,
+    client: Any,
+    messages: List[Dict[str, str]],
+    response_format: Optional[Dict[str, Any]] = None,
+    temperature: float = 0.2,
+    max_tokens: int = 1024
+) -> str:
     """
-    Wrapper for Groq completion call with automatic tenacity-based retries.
+    Wrapper for LLM completions with automatic tenacity-based retries.
+    Supports both Groq and Cohere clients dynamically.
     """
-    model = kwargs.get("model", GROQ_MODEL)
+    model = "llama-3.1-8b-instant" if provider == "groq" else "command-r-plus"
     try:
-        api_logger.info(f"Initiating Groq Chat Completion API Call - Model: {model}")
-        res = _client.chat.completions.create(*args, **kwargs)
-        api_logger.info(f"Groq Chat Completion API Call Success - Model: {model}")
-        return res
-    except groq.RateLimitError as rle:
-        api_logger.warning(f"Groq API Rate Limit Hit! Detail: {rle}")
+        api_logger.info(f"Initiating {provider.upper()} Chat Completion - Model: {model}")
+        
+        if provider == "groq":
+            kwargs = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
+            if response_format:
+                kwargs["response_format"] = response_format
+            res = client.chat.completions.create(**kwargs)
+            result_text = res.choices[0].message.content
+        elif provider == "cohere":
+            # Extract system prompt, message, and history for Cohere structure
+            system_prompt = ""
+            user_message = ""
+            cohere_history = []
+            
+            for msg in messages:
+                role = msg.get("role", "").lower()
+                content = msg.get("content", "")
+                if role == "system":
+                    system_prompt = content
+                elif role == "user":
+                    if msg == messages[-1]:
+                        user_message = content
+                    else:
+                        cohere_history.append({"role": "USER", "message": content})
+                elif role in ("assistant", "chatbot"):
+                    cohere_history.append({"role": "CHATBOT", "message": content})
+            
+            if not user_message and messages:
+                user_message = messages[-1].get("content", "")
+                
+            kwargs = {
+                "model": model,
+                "message": user_message,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
+            if system_prompt:
+                kwargs["preamble"] = system_prompt
+            if cohere_history:
+                kwargs["chat_history"] = cohere_history
+            if response_format:
+                kwargs["response_format"] = response_format
+                
+            res = client.chat(**kwargs)
+            result_text = res.text
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
+            
+        api_logger.info(f"{provider.upper()} Chat Completion API Call Success")
+        return result_text
+    except RATE_LIMIT_EXCEPTIONS as rle:
+        api_logger.warning(f"{provider.upper()} API Rate Limit Hit! Detail: {rle}")
         raise
     except Exception as e:
-        api_logger.error(f"Groq API Call Failed: {e}")
+        api_logger.error(f"{provider.upper()} API Call Failed: {e}")
         raise
+
 
 
 def generate_rag_stream(
     query: str,
-    contexts: List[Dict[str, Any]]
+    contexts: List[Dict[str, Any]],
+    session_id: Optional[str] = None,
+    db: Optional[Session] = None
 ) -> Generator[str, None, None]:
     """
     Generate a streamed answer synthesized from the retrieved contexts.
-
-    Parameters
-    ----------
-    query : str
-        The user's query.
-    contexts : list[dict]
-        Retrieved context chunks (each containing 'chunk_text', 'filename', 'page_no').
-
-    Yields
-    ------
-    str
-        Text tokens as they are generated by Groq.
+    Dynamically loads the client (Groq or Cohere) based on active provider configuration.
     """
     # Construct context block
     context_str = ""
@@ -101,39 +199,82 @@ def generate_rag_stream(
     ]
 
     try:
-        completion = _client_chat_create_with_retry(
-            model=GROQ_MODEL,
-            messages=messages,
-            stream=True,
-            temperature=0.2,
-            max_tokens=1024,
-        )
-        for chunk in completion:
-            token = chunk.choices[0].delta.content
-            if token:
-                yield token
+        provider, client = get_llm_client(session_id, db)
+    except KeyNotFoundError as knf:
+        yield f"\n[API Key configuration missing: {knf}]"
+        return
+
+    try:
+        if provider == "groq":
+            completion = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=messages,
+                stream=True,
+                temperature=0.2,
+                max_tokens=1024,
+            )
+            for chunk in completion:
+                token = chunk.choices[0].delta.content
+                if token:
+                    yield token
+        elif provider == "cohere":
+            # Extract preamble, message, and history for Cohere streaming
+            system_prompt_co = ""
+            user_message_co = ""
+            cohere_history = []
+            
+            for msg in messages:
+                role = msg.get("role", "").lower()
+                content = msg.get("content", "")
+                if role == "system":
+                    system_prompt_co = content
+                elif role == "user":
+                    if msg == messages[-1]:
+                        user_message_co = content
+                    else:
+                        cohere_history.append({"role": "USER", "message": content})
+            
+            if not user_message_co and messages:
+                user_message_co = messages[-1].get("content", "")
+                
+            kwargs = {
+                "model": "command-r-plus",
+                "message": user_message_co,
+                "temperature": 0.2,
+                "max_tokens": 1024
+            }
+            if system_prompt_co:
+                kwargs["preamble"] = system_prompt_co
+            if cohere_history:
+                kwargs["chat_history"] = cohere_history
+                
+            for event in client.chat_stream(**kwargs):
+                if event.event_type == "text-generation":
+                    yield event.text
     except Exception as e:
-        print(f"Error during Groq generation: {e}")
+        print(f"Error during {provider} generation: {e}")
         yield f"\n[Error generating answer: {e}]"
+
 
 
 def generate_structured_answer(
     query: str,
     contexts: List[Dict[str, Any]],
     intent: str = "rag",
-    chat_history: Optional[List[Dict[str, str]]] = None
+    chat_history: Optional[List[Dict[str, str]]] = None,
+    session_id: Optional[str] = None,
+    db: Optional[Session] = None
 ) -> StructuredAnswer:
     """
     Generate a structured answer synthesized from the retrieved contexts.
-    Uses Groq's JSON mode and parses the result with Pydantic model validation.
+    Uses dynamic LLM resolution (Groq or Cohere) and enforces JSON schema parsing.
     """
-    # Construct context block — also inject table markdown for pages that have tables
     import os
     from core.database import SessionLocal
     from schemas.table_schema import TableData
 
     context_str = ""
-    injected_table_pages: set = set()  # avoid duplicate table injections
+    injected_table_pages: set = set()
 
     for idx, c in enumerate(contexts, start=1):
         filename = c.get("filename", "Unknown file")
@@ -145,9 +286,16 @@ def generate_structured_answer(
         # Inject table markdown content for this page if not already done
         if c.get("has_tables") and doc_id and page_no and (doc_id, page_no) not in injected_table_pages:
             injected_table_pages.add((doc_id, page_no))
-            db = SessionLocal()
+            
+            # Reuse passed db session or open a new one
+            opened_db = False
+            db_session = db
+            if db_session is None:
+                db_session = SessionLocal()
+                opened_db = True
+                
             try:
-                tbl_rows = db.query(TableData).filter(
+                tbl_rows = db_session.query(TableData).filter(
                     TableData.document_id == doc_id,
                     TableData.page_no == page_no
                 ).all()
@@ -167,9 +315,9 @@ def generate_structured_answer(
             except Exception as tbl_err:
                 print(f"[LLM] Table injection warning: {tbl_err}")
             finally:
-                db.close()
+                if opened_db:
+                    db_session.close()
 
-    # Dynamically retrieve the Pydantic model's JSON schema to instruct the LLM
     import json
     import re
     schema = StructuredAnswer.model_json_schema()
@@ -186,17 +334,14 @@ def generate_structured_answer(
                 content = r.get("chunk_text") or ""
                 web_results_str += f"[{idx}] Title: {title}\nURL: {url}\nContent: {content}\n\n"
             base_prompt = template.format(web_results=web_results_str, user_query=query)
-            # Strip Response Format section from web_scrap.txt
             base_prompt_clean = re.sub(r'## Response Format.*?(?=## Quality Requirements|#|$)', '', base_prompt, flags=re.DOTALL)
         elif intent == "direct_llm":
             template = load_template("llm_template.txt")
             base_prompt = template
-            # Strip Markdown Formatting section from llm_template.txt
             base_prompt_clean = re.sub(r'## Markdown Formatting.*?(?=## Response Adaptation|#|$)', '', base_prompt, flags=re.DOTALL)
         else: # rag
             template = load_template("rag_template.txt")
             base_prompt = template.format(rag_context=context_str, user_query=query)
-            # Strip RESPONSE GUIDELINES and OUTPUT sections from rag_template.txt
             base_prompt_clean = re.sub(r'# RESPONSE GUIDELINES.*', '', base_prompt, flags=re.DOTALL)
     except Exception as e:
         print(f"Error loading template for intent {intent}: {e}. Falling back to default.")
@@ -224,33 +369,40 @@ def generate_structured_answer(
         messages.extend(chat_history)
     messages.append({"role": "user", "content": user_content})
 
-    # Try 1: Groq with response_format={"type": "json_object"}
     try:
-        completion = _client_chat_create_with_retry(
-            model=GROQ_MODEL,
+        provider, client = get_llm_client(session_id, db)
+    except KeyNotFoundError as knf:
+        return StructuredAnswer(
+            answer=f"Unable to generate answer: {knf}",
+            key_takeaways=["LLM API Key missing"],
+            suggested_followups=["Please navigate to BYOK settings to configure your API key"]
+        )
+
+    # Try 1: with response_format={"type": "json_object"}
+    try:
+        raw_response = call_llm_chat_with_retry(
+            provider=provider,
+            client=client,
             messages=messages,
             response_format={"type": "json_object"},
             temperature=0.2,
             max_tokens=1024,
         )
-        raw_response = completion.choices[0].message.content
         return StructuredAnswer.model_validate_json(raw_response)
     except Exception as e:
-        print(f"Groq JSON mode failed for structured generation: {e}. Retrying without JSON mode constraint...")
+        print(f"{provider.upper()} JSON mode failed for structured generation: {e}. Retrying without JSON mode constraint...")
         
         # Try 2: Fallback without response_format and clean up markdown blocks in python
         try:
-            completion = _client_chat_create_with_retry(
-                model=GROQ_MODEL,
+            raw_response = call_llm_chat_with_retry(
+                provider=provider,
+                client=client,
                 messages=messages,
                 temperature=0.2,
                 max_tokens=1024,
             )
-            raw_response = completion.choices[0].message.content
             
-            # Helper to extract JSON from raw response
             cleaned_json = raw_response.strip()
-            # Strip markdown wrappers if present
             if cleaned_json.startswith("```"):
                 first_newline = cleaned_json.find("\n")
                 if first_newline != -1:
@@ -275,11 +427,13 @@ def generate_structured_answer(
 
 def generate_direct_answer(
     query: str,
-    chat_history: Optional[List[Dict[str, str]]] = None
+    chat_history: Optional[List[Dict[str, str]]] = None,
+    session_id: Optional[str] = None,
+    db: Optional[Session] = None
 ) -> StructuredAnswer:
     """
     Generate a general, direct answer to the query without retrieved contexts.
-    Uses Groq's JSON mode and parses the result with Pydantic model validation.
+    Uses dynamic LLM resolution (Groq or Cohere) and enforces JSON schema parsing.
     """
     import json
     import re
@@ -293,7 +447,6 @@ def generate_direct_answer(
         print(f"Error loading llm_template.txt: {e}. Falling back to default.")
         base_prompt = "You are HybridCache RAG v2's Assistant, an advanced AI designed to answer questions accurately."
 
-    # Strip markdown formatting examples from base_prompt to prevent model confusion in JSON mode
     base_prompt_clean = re.sub(r'## Markdown Formatting.*?(?=## Response Adaptation|#|$)', '', base_prompt, flags=re.DOTALL)
 
     system_prompt = (
@@ -313,33 +466,40 @@ def generate_direct_answer(
         messages.extend(chat_history)
     messages.append({"role": "user", "content": query})
 
-    # Try 1: Groq with response_format={"type": "json_object"}
     try:
-        completion = _client_chat_create_with_retry(
-            model=GROQ_MODEL,
+        provider, client = get_llm_client(session_id, db)
+    except KeyNotFoundError as knf:
+        return StructuredAnswer(
+            answer=f"Unable to generate answer: {knf}",
+            key_takeaways=["LLM API Key missing"],
+            suggested_followups=["Please navigate to BYOK settings to configure your API key"]
+        )
+
+    # Try 1: with response_format={"type": "json_object"}
+    try:
+        raw_response = call_llm_chat_with_retry(
+            provider=provider,
+            client=client,
             messages=messages,
             response_format={"type": "json_object"},
             temperature=0.4,
             max_tokens=1024,
         )
-        raw_response = completion.choices[0].message.content
         return StructuredAnswer.model_validate_json(raw_response)
     except Exception as e:
-        print(f"Groq JSON mode failed for direct structured generation: {e}. Retrying without JSON mode constraint...")
+        print(f"{provider.upper()} JSON mode failed for direct structured generation: {e}. Retrying without JSON mode constraint...")
         
         # Try 2: Fallback without response_format and clean up markdown blocks in python
         try:
-            completion = _client_chat_create_with_retry(
-                model=GROQ_MODEL,
+            raw_response = call_llm_chat_with_retry(
+                provider=provider,
+                client=client,
                 messages=messages,
                 temperature=0.4,
                 max_tokens=1024,
             )
-            raw_response = completion.choices[0].message.content
             
-            # Helper to extract JSON from raw response
             cleaned_json = raw_response.strip()
-            # Strip markdown wrappers if present
             if cleaned_json.startswith("```"):
                 first_newline = cleaned_json.find("\n")
                 if first_newline != -1:
@@ -360,5 +520,6 @@ def generate_direct_answer(
                 key_takeaways=["Error occurred during direct generation"],
                 suggested_followups=["Try submitting your query again"]
             )
+
 
 

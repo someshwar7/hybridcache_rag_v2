@@ -25,48 +25,53 @@ load_dotenv()
 # ─────────────────────────────────────────────
 # Configuration
 # ─────────────────────────────────────────────
-COHERE_API_KEY  = os.getenv("COHERE_API_KEY")
 EMBEDDING_MODEL = "embed-english-v3.0"   # Free trial supported
 EMBEDDING_DIMS  = 1024                   # Dimensions produced by v3.0
 INPUT_TYPE      = "search_document"      # Use "search_query" when querying
 
+from service.byok_service import provider_manager, KeyNotFoundError
+from core.database import SessionLocal
+from sqlalchemy.orm import Session
 
-if not COHERE_API_KEY:
-    raise EnvironmentError(
-        "COHERE_API_KEY not found in environment. "
-        "Please add it to your .env file."
-    )
-
-_client = cohere.Client(api_key=COHERE_API_KEY)
+def get_cohere_client(session_id: Optional[str] = None, db: Optional[Session] = None) -> cohere.Client:
+    """
+    Dynamically retrieves the Cohere client for the given session.
+    Falls back to COHERE_API_KEY in the environment if not configured by the user.
+    """
+    opened_db = False
+    if db is None:
+        db = SessionLocal()
+        opened_db = True
+    try:
+        if session_id:
+            try:
+                return provider_manager.get_client(db, session_id, "cohere")
+            except KeyNotFoundError:
+                pass
+        cohere_env = os.getenv("COHERE_API_KEY")
+        if cohere_env:
+            return cohere.Client(api_key=cohere_env)
+        raise KeyNotFoundError("No Cohere API key configured. Please upload a Cohere API key.")
+    finally:
+        if opened_db:
+            db.close()
 
 
 def get_embeddings(
     texts: List[str],
-    input_type: str = INPUT_TYPE
+    input_type: str = INPUT_TYPE,
+    session_id: Optional[str] = None,
+    db: Optional[Session] = None
 ) -> List[List[float]]:
     """
     Generate embeddings for a list of text strings using Cohere API.
-
-    Parameters
-    ----------
-    texts : list[str]
-        List of text strings to embed. Empty strings are replaced
-        with a single space to avoid API errors.
-    input_type : str
-        "search_document" for indexing, "search_query" for querying.
-
-    Returns
-    -------
-    list[list[float]]
-        List of 1024-dimensional float vectors, one per input text.
     """
-
-    # Cohere rejects empty strings - replace with whitespace
     cleaned = [t if t and t.strip() else " " for t in texts]
 
     try:
+        client = get_cohere_client(session_id, db)
         api_logger.info(f"Initiating Cohere Embedding API Call - Model: {EMBEDDING_MODEL}, Chunks: {len(cleaned)}")
-        response = _client.embed(
+        response = client.embed(
             texts=cleaned,
             model=EMBEDDING_MODEL,
             input_type=input_type,
@@ -84,21 +89,12 @@ def get_embeddings(
 
 def get_single_embedding(
     text: str,
-    input_type: str = INPUT_TYPE
+    input_type: str = INPUT_TYPE,
+    session_id: Optional[str] = None,
+    db: Optional[Session] = None
 ) -> List[float]:
     """
     Generate a single embedding for one text string.
-
-    Parameters
-    ----------
-    text : str
-        Text string to embed.
-    input_type : str
-        "search_document" for indexing, "search_query" for querying.
-
-    Returns
-    -------
-    list[float]
-        A 1024-dimensional float vector.
     """
-    return get_embeddings([text], input_type=input_type)[0]
+    return get_embeddings([text], input_type=input_type, session_id=session_id, db=db)[0]
+

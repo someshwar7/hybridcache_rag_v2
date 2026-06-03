@@ -58,7 +58,8 @@ def answer_question(request: RetrieveRequest):
                     has_documents=has_docs,
                     top_k=request.top_k,
                     document_id=request.document_id,
-                    execute=False
+                    execute=False,
+                    session_id=request.session_id
                 )
                 intent = intent_data.intent
                 results = []
@@ -68,7 +69,7 @@ def answer_question(request: RetrieveRequest):
                 # Step 3: Route, execute action, and Synthesize based on classified intent
                 if intent == "direct_llm":
                     yield make_status_event("LLM: Generating direct answer...")
-                    structured_data = generate_direct_answer(request.query, chat_history=chat_history)
+                    structured_data = generate_direct_answer(request.query, chat_history=chat_history, session_id=request.session_id)
                     # Wrap response into matching results format
                     results = [{
                         "chunk_text": structured_data.answer,
@@ -85,7 +86,7 @@ def answer_question(request: RetrieveRequest):
                     results = search_tavily(request.query)
                     
                     yield make_status_event("LLM: Synthesizing web search results...")
-                    structured_data = generate_structured_answer(query=request.query, contexts=results, intent="web_search", chat_history=chat_history)
+                    structured_data = generate_structured_answer(query=request.query, contexts=results, intent="web_search", chat_history=chat_history, session_id=request.session_id)
                     
                 else:  # intent == "rag"
                     yield make_status_event("RAG: Retrieving relevant document chunks...")
@@ -100,11 +101,12 @@ def answer_question(request: RetrieveRequest):
                         query=request.query,
                         top_k=request.top_k,
                         document_id=request.document_id,
-                        page_no=page_no
+                        page_no=page_no,
+                        session_id=request.session_id
                     )
                     
                     yield make_status_event("LLM: Synthesizing RAG contexts...")
-                    structured_data = generate_structured_answer(query=request.query, contexts=results, intent="rag", chat_history=chat_history)
+                    structured_data = generate_structured_answer(query=request.query, contexts=results, intent="rag", chat_history=chat_history, session_id=request.session_id)
 
                 # Save conversation to Redis history list
                 if request.session_id and redis_client:
