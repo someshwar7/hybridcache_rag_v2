@@ -1,4 +1,4 @@
-# HybridCache RAG v2
+# 🏯 HybridCache RAG v2
 
 An advanced, high-performance Retrieval-Augmented Generation (RAG) assistant designed with a premium Japanese Zen aesthetics theme (Sumi-black backgrounds, Camellia/Sakura-red highlights, and Miyabi-gold accents). 
 
@@ -6,7 +6,17 @@ The application utilizes **Docling** for deep semantic document layout parsing, 
 
 ---
 
-## 1. Environment Configurations (`.env`)
+## 📸 System Workflows: V1 vs. V2
+
+Below is a visual side-by-side comparison showcasing the progression from the legacy Traditional RAG pipeline to the optimized HybridCache RAG v2 architecture.
+
+| Legacy: Traditional RAG v1 | Modern: HybridCache RAG v2 |
+| :---: | :---: |
+| ![Traditional RAG v1](arch/TRADITIONAL%20RAG%20V1.gif) | ![HybridCache RAG v2](arch/HYBRID%20CACHE%20RAG%20V2.gif) |
+
+---
+
+## 🛠️ Environment Configurations (`.env`)
 
 Create a `.env` file at the root of the project. Below are the required and optional environment configurations:
 
@@ -32,8 +42,7 @@ REDIS_DB=0
 
 ---
 
-
-## 2. System Flow & Architecture
+## 📐 System Flow & Architecture
 
 The application handles operations through three distinct flows:
 
@@ -53,13 +62,6 @@ graph TD
     H --> I[Frontend UI Parser]
     I -->|Tabular standings / code blocks| J[Styled HTML visual rendering]
 ```
-
-### Comparison: Legacy Traditional RAG v1 vs. HybridCache RAG v2
-For comparative reference, here is the workflow of the legacy **Traditional RAG v1** system:
-
-![Traditional RAG v1](TRADITIONAL%20RAG%20V1.gif)
-
----
 
 ### A. Document Upload & Preprocessing Flow
 1. **Upload**: User uploads a PDF file.
@@ -82,11 +84,11 @@ For comparative reference, here is the workflow of the legacy **Traditional RAG 
 
 ---
 
-## 3. How to Start the Application
+## 🚀 How to Start the Application
 
 Ensure you have a running **PostgreSQL** instance (with the `vector` extension enabled) and a **Redis** server running.
 
-### A. Local Run (Development)
+### Option A: Local Run (Development)
 1. Set up the local virtual environment and install packages:
    ```bash
    pip install -r requirements.txt
@@ -98,7 +100,7 @@ Ensure you have a running **PostgreSQL** instance (with the `vector` extension e
      ```
 3. Open [http://localhost:1800/](http://localhost:1800/) in your browser.
 
-### B. Docker Run (Containerized)
+### Option B: Docker Run (Containerized)
 1. Build the Docker image:
    ```bash
    docker build -t hybridcache-rag-v2 .
