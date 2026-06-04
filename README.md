@@ -1,6 +1,6 @@
-# 🏯 HybridCache RAG v2
+# 🚀 HybridCache RAG v2
 
-An advanced, high-performance Retrieval-Augmented Generation (RAG) assistant designed with a premium Japanese Zen aesthetics theme (Sumi-black backgrounds, Camellia/Sakura-red highlights, and Miyabi-gold accents). 
+An advanced, high-performance Retrieval-Augmented Generation (RAG) assistant designed with a clean, modern dark dashboard layout and responsive side panels.
 
 The application utilizes **Docling** for deep semantic document layout parsing, **PostgreSQL** with the `pgvector` extension for semantic storage, **Redis** for session management and file-lifecycle cache control, **Cohere** for vector embeddings and reranking, and **Groq** for rapid LLM orchestration. Web-scraped tables and markdown code-blocks are dynamically parsed and rendered as visual HTML blocks.
 
@@ -13,6 +13,44 @@ Below is a visual side-by-side comparison showcasing the progression from the le
 | Legacy: Traditional RAG v1 | Modern: HybridCache RAG v2 |
 | :---: | :---: |
 | ![Traditional RAG v1](arch/TRADITIONAL%20RAG%20V1.gif) | ![HybridCache RAG v2](arch/HYBRID%20CACHE%20RAG%20V2.gif) |
+
+---
+
+## 🖥️ User Interface Tour
+
+Explore the main features and layout of the HybridCache RAG v2 interface using the interactive slides below (expand each section to view):
+
+<details open>
+  <summary><b>Slide 1: Interactive Upload &amp; Page Range Selector</b></summary>
+  <p>The main dashboard allows users to attach documents (such as <code>book.pdf</code>) and configure custom page indexing ranges for targeted semantic extraction.</p>
+  <p align="center">
+    <img src="arch/ui1.png" alt="Slide 1: Upload and Page Range Selector" width="95%" />
+  </p>
+</details>
+
+<details>
+  <summary><b>Slide 2: Ingestion Pipeline &amp; Live Developer Logs</b></summary>
+  <p>Track the multi-stage ingestion process in real-time. The Document Inspector panel shows live developer logs detailing layout scanning, frame rendering, and parsing progress.</p>
+  <p align="center">
+    <img src="arch/ui2.png" alt="Slide 2: Ingestion Progress and Developer Logs" width="95%" />
+  </p>
+</details>
+
+<details>
+  <summary><b>Slide 3: Context-Aware Chat &amp; Page Viewer</b></summary>
+  <p>Interact with the ingested documents through an AI chat interface. View synthetic responses, key takeaways, and relevant source page renders side-by-side.</p>
+  <p align="center">
+    <img src="arch/ui3.png" alt="Slide 3: Semantic Chat and Page Viewer" width="95%" />
+  </p>
+</details>
+
+<details>
+  <summary><b>Slide 4: Structured Metadata &amp; JSON Inspector</b></summary>
+  <p>Access structured semantic details, paragraph context text, and similarity scores returned by the Groq/Cohere orchestrator inside the interactive JSON inspector.</p>
+  <p align="center">
+    <img src="arch/ui4.png" alt="Slide 4: JSON Response Inspector" width="95%" />
+  </p>
+</details>
 
 ---
 
@@ -80,7 +118,7 @@ graph TD
 * The server responds with a structured JSON object containing the markdown answer text, key takeaways, and suggested followups.
 * The frontend parser `parseMarkdown` in `ui/script.js`:
   * Detects multi-line code blocks and isolates them to maintain formatting.
-  * Identifies tables (even loose tables without outer pipes) and renders them as styled HTML tables with Noto Serif JP serif typography.
+  * Identifies tables (even loose tables without outer pipes) and renders them as styled HTML tables.
 
 ---
 
